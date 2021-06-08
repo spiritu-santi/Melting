@@ -1,4 +1,4 @@
-# Melting
+# Greendland's melting and the biodiversity crisis
 Files needed to run the results from:
 
 Ureta et al. 2021. Greendland’s thaw pushes the biodiversity crisis (under review)
