@@ -2493,30 +2493,6 @@ stats %>% group_by(Group) %>% filter(!is.na(TSS)) %>%
   geom_hline(yintercept = 0)+theme(panel.grid = element_blank(),legend.position="none",panel.background = element_blank(),axis.line = element_line()) + scale_x_continuous(breaks = pretty(stats$TSS),labels = abs(pretty(stats$TSS)))  + geom_vline(xintercept = 0.7) +
     NULL
   
-  
-
-load("~/Desktop/TERMOS_MS/Validation/VariablesSummary.Rdata")
-list_vars -> plantas
-load("~/Desktop/TERMOS_MS/Validation/VariablesSummary_Animals.Rdata")
-list_vars %>% bind_rows(.,plantas) -> list_vars
-MostImp <- lapply(list_vars$Bios, function(x) x %>% arrange(desc(Importance)) %>% .[1,1] %>%  mutate_if(is.factor,as.character) %>% pull())
-
-list_vars %>% mutate(MostImp = (MostImp)) %>% select(-Bios) %>% unnest(MostImp) %>% select(Species,MostImp) %>% inner_join(STDrange_tib %>% ungroup(),.,by="Species") %>% select(1:3,MostImp,ends_with("_T2")) %>%  pivot_longer(cols=ends_with("T2"),names_to = "Scenario",values_to = "Range") %>% filter(Scenario%in%c("GreenControl_T2","Green0.5_T2"),Range <= - 0.95) %>% mutate(Group=case_when(Group == "Anfibios"|Group =="Aves"|Group =="Mamiferos"|Group =="Reptiles" ~ "Tetrapods", Group=="Lycophyta"|Group =="Magnoliophyta"|Group =="Monilophyta"|Group =="Pinophyta" ~ "Vascular Plants")) %>% group_by(MostImp,Scenario) %>% summarise(Freq=n()) %>% ungroup()  %>% pivot_wider(names_from = Scenario,values_from = Freq) %>% mutate(Green0.5_T2=Green0.5_T2/sum(Green0.5_T2),GreenControl_T2=GreenControl_T2/sum(GreenControl_T2)) %>% pivot_longer(cols=2:3,names_to = "Group",values_to = "Freq") %>% mutate(Freq= ifelse(Group =="Green0.5_T2",Freq,Freq*-1)) -> variables 
-variables %>% ggplot(aes(x=MostImp,y=Freq,fill=Group)) + 
-  geom_bar(stat="identity",position="identity") + 
-  coord_flip()+
-  theme(legend.position="bottom",axis.text.x = element_text(angle = 90),panel.background = element_blank(),axis.line = element_line(),axis.text.x.bottom  = element_text(angle=0),panel.grid.major.x = element_line(colour = "grey80")) + scale_y_continuous(limits = c(-0.35,0.35),breaks = pretty(variables$Freq),labels = abs(pretty(variables$Freq))) + labs(title="Most important variables in SDMs",subtitle="for species with range loss > 95%") +
-  NULL
-
-
-
-
-
-
-
-
-
-
 
 #### Alluvial plots
 library(ggalluvial)
@@ -2544,5 +2520,152 @@ pivot_longer(cols=4:19,names_to = "Scenario",values_to = "Loss") %>% mutate(Loss
 NULL
 dev.off()
 
+##############     ######
+library(tidyverse)
+library(raster,exclude="select")
+setwd("~/Documents/1.PROYECTOS/1.Termohalina/Final_v4/TIBS/")
+list_arch <- list.files(pattern="RangeTib",recursive = F)
+list_tibs <- lapply(list_arch, function(x) mget(load(x))) %>% lapply(function(x)x[[1]]) %>% bind_rows() %>% 
+  mutate_if(is.numeric , replace_na, replace = 0) %>% rename("Present"=Present_) -> range_tib
+range_tib %>% mutate_if(is.numeric , replace_na, replace = 0) %>% mutate_at(5:ncol(.), ~((.x - Present)/Present)) %>% 
+  mutate(Present = 0) -> STDrange_tib
+load("~/Desktop/TERMOS_MS/Validation/VariablesSummary.Rdata")
+list_vars -> plantas
+load("~/Desktop/TERMOS_MS/Validation/VariablesSummary_Animals.Rdata")
+list_vars %>% bind_rows(.,plantas) -> list_vars
+MostImp <- lapply(list_vars$Bios, function(x) x %>% arrange(desc(Importance)) %>% .[1,1] %>%  mutate_if(is.factor,as.character) %>% pull())
+
+list_vars %>% mutate(MostImp = (MostImp)) %>% select(-Bios) %>% unnest(MostImp) %>% select(Species,MostImp) %>% inner_join(STDrange_tib %>% ungroup(),.,by="Species") %>% select(1:4,MostImp) %>% group_by(MostImp,Group,Country) %>% summarise(Freq=n()) %>% ungroup() %>% pivot_wider(names_from = Country,values_from = Freq) %>% pivot_longer(cols=-c(1:2),names_to = "Country",values_to = "Freq") -> variables 
+variables %>% group_by(Country) %>% mutate(Freq=Freq/sum(Freq,na.rm=T)) %>% ggplot(aes(x=MostImp,y=Freq,fill=Country)) + 
+  geom_bar(stat="identity",position="dodge") + scale_fill_viridis_d(option="A") +
+  theme(legend.position="none",axis.text.x = element_text(angle = 90),panel.background = element_blank(),axis.line = element_line(),axis.text.x.bottom  = element_text(angle=90),panel.grid.major.x = element_blank())  + labs(title="Most important variables in SDMs",subtitle="proportional to total per country") + facet_wrap(facets = "Country") +
+  NULL
+list_vars %>% mutate(MostImp = (MostImp)) %>% select(-Bios) %>% unnest(MostImp) %>% select(Species,MostImp) %>% inner_join(STDrange_tib %>% ungroup(),.,by="Species") %>% select(1:4,MostImp) %>% group_by(MostImp,Group,Country) %>% summarise(Freq=n()) %>% ungroup() %>% pivot_wider(names_from = Group,values_from = Freq) %>% pivot_longer(cols=-c(1:2),names_to = "Group",values_to = "Freq") %>% group_by(Group) %>% mutate(Freq=Freq/sum(Freq,na.rm=T)) %>% ggplot(aes(x=MostImp,y=Freq,fill=Group)) + 
+  geom_bar(stat="identity",position="dodge") + scale_fill_viridis_d(option="A") +
+  theme(legend.position="none",axis.text.x = element_text(angle = 90),panel.background = element_blank(),axis.line = element_line(),axis.text.x.bottom  = element_text(angle=90),panel.grid.major.x = element_blank())  + labs(title="Most important variables in SDMs",subtitle="proportional to total per group") + facet_wrap(facets = "Group") +
+  NULL
+save(variables,file="~/Desktop/Resolución0.083/Bios.RData")
+
+setwd("~/Desktop/Resolución0.083/")
+list.files(pattern = ".tif$",recursive = T,full.names = F) -> list_arch
+deltas <- raster::stack(list_arch)
+
+setwd("~/Documents/1.PROYECTOS/1.Termohalina/Final_v4/TIBS/")
+list_arch <- list.files(pattern="SumTib",recursive = F)
+list_tibs <- lapply(list_arch, function(x) mget(load(x))) %>% lapply(function(x)x[[1]]) %>% bind_rows() 
+list_tibs %>% ungroup() %>% group_by(CellID) -> sum_tib
+sum_tib %>% distinct(CellID,.keep_all = T) %>%  select(CellID,Longitud,Latitude) -> df_tib
+raster::extract(deltas,df_tib[,2:3]) -> aver
+aver %>% as_tibble() %>% bind_cols(df_tib,.) -> df_tib
+df_tib %>% select(-Longitud,-Latitude) %>% ungroup() -> bios
+names(bios) <- c("CellID","bio01_GreenControl_T1","bio01_GreenControl_T2","bio01_GreenControl_T3","bio12_GreenControl_T1","bio12_GreenControl_T2","bio12_GreenControl_T3","bio15_GreenControl_T1","bio15_GreenControl_T2","bio15_GreenControl_T3","bio04_GreenControl_T1","bio04_GreenControl_T2","bio04_GreenControl_T3","bio01_Green0.5_T1","bio01_Green0.5_T2","bio01_Green0.5_T3","bio12_Green0.5_T1","bio12_Green0.5_T2","bio12_Green0.5_T3", "bio15_Green0.5_T1","bio15_Green0.5_T2" ,"bio15_Green0.5_T3", "bio04_Green0.5_T1","bio04_Green0.5_T2","bio04_Green0.5_T3","bio01_Green1.5_T1", "bio01_Green1.5_T2" , "bio01_Green1.5_T3",  "bio12_Green1.5_T1", "bio12_Green1.5_T2","bio12_Green1.5_T3", "bio15_Green1.5_T1", "bio15_Green1.5_T2", "bio15_Green1.5_T3", "bio04_Green1.5_T1" , "bio04_Green1.5_T2" ,"bio04_Green1.5_T3","bio01_Green1_T1","bio01_Green1_T2","bio01_Green1_T3","bio12_Green1_T1","bio12_Green1_T2" ,"bio12_Green1_T3","bio15_Green1_T1","bio15_Green1_T2","bio15_Green1_T3","bio04_Green1_T1","bio04_Green1_T2" ,"bio04_Green1_T3","bio01_Green3_T1" ,"bio01_Green3_T2","bio01_Green3_T3","bio12_Green3_T1","bio12_Green3_T2" ,"bio12_Green3_T3", "bio15_Green3_T1","bio15_Green3_T2","bio15_Green3_T3","bio04_Green3_T1","bio04_Green3_T2","bio04_Green3_T3")
+sum_tib %>% distinct(Group,Country,CellID) -> sum_lists
+#sum_tib %>% group_by(Country) %>% group_split(.keep=T) -> sum_lists
+
+### Bioclimatic deltas
+sum_lists %>% left_join(.,bios,by="CellID") -> delta_means
+
+### Range loss medians
+STDrange_tib %>% select(-Present) %>% group_by(Group,Country) %>% summarise(across(where(is.double), ~ median(.x, na.rm = TRUE))) -> range_means
+  
+### Most Important variables
+list_vars -> subset_vars
+MostImp <- lapply(subset_vars$Bios, function(x) x %>% arrange(desc(Importance)) %>% .[1,1] %>%  mutate_if(is.factor,as.character) %>% pull())
+subset_vars %>% mutate(MostImp = all_of(MostImp)) %>% select(-Bios) %>% unnest(MostImp) %>% select(Species,MostImp) %>% inner_join(STDrange_tib %>% ungroup(),.,by="Species") %>% select(1:4,MostImp) %>% group_by(MostImp,Group,Country) %>% summarise(Freq=n()) %>% group_by(Group,Country) %>% mutate(Sum=sum(Freq)/2) %>% arrange(Group)  -> sum_variables
+
+range_means %>% mutate(ID= paste(Group,Country,sep="_"),.before=Group) -> range_means
+sum_variables %>% mutate(ID= paste(Group,Country,sep="_"),.before=Group) -> sum_variables
+### Join
+delta_means %>% group_by(Group,Country) %>% nest() %>% mutate(ID= paste(Group,Country,sep="_"),.before=Group) %>% left_join(.,(range_means %>% ungroup() %>%  select(-Group,-Country)),by="ID") %>% right_join((sum_variables %>% ungroup() %>%  select(-Group,-Country)),.,by="ID") %>% mutate(MostImp=sub("_","",MostImp)) -> total_proms
+for (i in 1:nrow(total_proms)){
+  cat(i,"\n")
+total_proms$data[[i]] <- total_proms$data[[i]] %>% select(contains("bio01"),contains("bio04"),contains("bio12"),contains("bio15")) %>% pivot_longer(cols=everything(),names_to = "Scenario",values_to = "Values") %>% #separate(Scenario,into=c("Bio","Scenario"),sep="_",extra="merge") %>%
+group_by(Scenario) %>% summarise(DeltaMEAN=median(Values,na.rm=T),DeltaUP=quantile(Values,probs=0.9,na.rm=T),DeltaDOWN=quantile(Values,probs=0.1,na.rm=T),DeltaFIRST=quantile(Values,probs=0.25,na.rm=T),DeltaTHIRD=quantile(Values,probs=0.75,na.rm=T),) %>% pivot_wider(names_from = "Scenario",values_from = c(DeltaMEAN,DeltaUP,DeltaDOWN,DeltaTHIRD,DeltaFIRST)) 
+}
+total_proms -> testa
 
 
+# c("Anfibios","Aves","Lycophyta","Magnoliophyta","Mamiferos" ,"Monilophyta","Pinophyta","Reptiles")
+# which_bio = "bio15"
+# which_group = "Monilophyta"
+# testa %>% group_by(ID) %>% filter(Freq==max(Freq)) %>%  distinct(ID,.keep_all = T) %>% unnest(data) %>% filter(Group==which_group) %>% select(ID,starts_with("bio")) %>% pivot_longer(cols=-1,names_to = "Bio",values_to  = "Deltas") %>% filter(grepl(which_bio,Bio)) %>% group_by(ID) -> delta_plots
+# p1 <- delta_plots %>% ggplot(aes(x=ID,y=-1*Deltas,color=ID)) +
+#   geom_segment( aes(x=ID, xend=ID, y=0, yend=-1*Deltas)) +
+#   geom_point(size=2) + coord_flip()+ theme(panel.background = element_blank(),panel.grid = element_blank(),axis.line=element_line(),legend.position = "none") + labs(y="Delta Climate (future - present)")  + facet_wrap(facets=c("Bio"),ncol = 3) + scale_color_viridis_d(option="A") + geom_hline(yintercept=c(0,2,4,6),alpha=c(0.3)) + NULL
+# testa %>% group_by(ID) %>% filter(Freq==max(Freq)) %>%  distinct(ID,.keep_all = T) %>% unnest(data) %>% filter(Group==which_group) %>% select(ID,starts_with("Green")) %>% pivot_longer(cols=-1,names_to = "Scenario",values_to  = "Ranges") %>% group_by(ID) -> ranges_plots
+# p2 <- ranges_plots %>% ggplot(aes(x=ID,y=1*Ranges,color=ID)) +
+#   geom_segment( aes(x=ID, xend=ID, y=0, yend=1*Ranges)) +
+#   geom_point(size=2) + coord_flip()+ theme(panel.background = element_blank(),panel.grid = element_blank(),axis.line=element_line(),legend.position = "none") + labs(y="Delta Climate (future - present)")  + facet_wrap(facets=c("Scenario"),ncol = 3) + scale_color_viridis_d(option="A") + NULL
+# ranges_plots %>% mutate(key=paste(ID,Scenario,sep="_")) -> ranges_plots
+# delta_plots %>% separate(col=Bio,into=c("BioBis","Scenario"),sep="_",extra = "merge",remove=F) %>% mutate(key=paste(ID,Scenario,sep="_")) %>% right_join(.,(ranges_plots %>% ungroup() %>% select(-ID,-Scenario)),by="key")  %>% separate(col=Scenario,into=c("Model","Time"),sep="_",extra = "merge",remove=F) %>% filter(Time=="T1") %>% ggplot(aes(x=-1*Deltas,y=1*Ranges,color=Model)) + geom_point(size=2) + theme(panel.background = element_blank(),panel.grid = element_blank(),axis.line=element_line(),legend.position = "right") + facet_wrap(facets=c("ID"),ncol = 3,scales="free") + labs(title="Climate change vs. Range loss",subtitle = paste(which_bio)) + #scale_color_viridis_d(option="A") + 
+# NULL
+
+
+testa$Country %>% unique() -> which_Group
+#which_Group <- which_Group[c(7,6,4,3,1,2,5,8)]
+pdf("~/Desktop/TempCountry.pdf",onefile = T)
+for (i in 1:length(which_Group)){
+testa %>% group_by(ID) %>% filter(Freq==max(Freq)) %>%  distinct(ID,.keep_all = T) %>% unnest(data) %>% ungroup() %>% pivot_longer(cols=-c(1:6,307:321),names_to = c("Statistics","Bio","Scenario","Time"),names_pattern = "Delta(.*)_(.*)_(.*)_(.*)",values_to = "Value") %>%ungroup() %>%  pivot_wider(names_from = c(Bio,Statistics),values_from = Value) -> esto #%>% filter(Country%in%which_country[1:12]) -> esto
+range(-1*esto$bio01_MEAN) %>% diff() -> x_scale
+x_scale <- x_scale*0.001
+range(-1*esto$bio04_MEAN) %>% diff() -> y_scale
+y_scale <- y_scale*0.005
+print(
+  esto %>% mutate(Scenario=factor(Scenario,levels=c("GreenControl","Green0.5","Green1","Green1.5","Green3"))) %>%  filter(Country==which_Group[i]) %>% 
+    ggplot(aes(-1*bio01_MEAN, -1*bio04_MEAN,fill=Scenario)) +
+  geom_segment(aes(x=-1*bio01_MEAN,xend=-1*bio01_MEAN,y = -1*bio04_DOWN,yend=-1*bio04_UP,color=Scenario),alpha=0.1,size=1.5)+
+    geom_segment(aes(y=-1*bio04_MEAN,yend=-1*bio04_MEAN,x = -1*bio01_DOWN,xend=-1*bio01_UP,color=Scenario),alpha=0.1,size=1.5) +
+  #geom_segment(aes(x=-1*bio01_MEAN,xend=-1*bio01_MEAN,y = -1*bio12_FIRST,yend=-1*bio12_THIRD,color=Scenario),alpha=0.3,size=1.5)+
+ # geom_segment(aes(y=-1*bio12_MEAN,yend=-1*bio12_MEAN,x = -1*bio01_FIRST,xend=-1*bio01_THIRD,color=Scenario),alpha=0.3,size=1.5) +
+  #   geom_rect(aes(xmin=-1*bio01_MEAN + x_scale,xmax=-1*bio01_MEAN-x_scale,ymin = -1*bio12_DOWN,ymax=-1*bio12_UP),alpha=0.1) +
+  # geom_rect(aes(ymin=-1*bio12_MEAN + y_scale,ymax=-1*bio12_MEAN-y_scale,xmin = -1*bio01_DOWN,xmax=-1*bio01_UP),alpha=0.1) +
+  # geom_rect(aes(xmin=-1*bio01_MEAN + x_scale,xmax=-1*bio01_MEAN-x_scale,ymin = -1*bio12_FIRST,ymax=-1*bio12_THIRD),alpha=0.3) +
+  # geom_rect(aes(ymin=-1*bio12_MEAN + y_scale,ymax=-1*bio12_MEAN-y_scale,xmin = -1*bio01_FIRST,xmax=-1*bio01_THIRD),alpha=0.3) + 
+  geom_point(size=2.5,alpha=0.8,stroke=0.5,shape=21) +
+  scale_fill_viridis_d(option="A",begin=0.1,end = 0.8,direction=-1)+
+  scale_color_viridis_d(option="A",begin=0.1,end = 0.8,direction=-1)+
+  labs(title=which_Group[i],x="Change in temperature",
+       y="Change in temperature seasonality") + 
+    stat_ellipse(type="norm",geom="path",aes(color=Scenario)) +
+    theme(legend.position = "bottom",panel.background = element_blank(),panel.grid = element_blank(),axis.line=element_line()) + 
+facet_wrap(c("Time"),ncol=2,scales="free",strip.position = "right") +
+  NULL
+)
+}
+dev.off()
+
+
+
+
+
+#######
+
+
+
+
+
+
+
+
+total_proms$data[[i]] %>% select(contains("bio01"),contains("bio04"),contains("bio12"),contains("bio15")) %>% pivot_longer(cols=everything(),names_to = "Scenario",values_to = "Values") %>% #filter(grepl("_T1",Scenario)) %>% 
+separate(Scenario,into=c("Bio","Scenario"),sep="_",extra="merge") %>% group_by(Scenario,Bio) %>%
+ #summarise(MedianDelta=-1*median(Values,na.rm=T)) %>%
+  #pivot_wider(names_from = c("Bio","Scenario"),values_from = "Values") -> xx_bios
+  ggplot(aes(x=Scenario,y=-1*Values,fill = Scenario)) + geom_violin() + facet_wrap(facets="Bio",scales = "free") + stat_summary(fun=median,geom="crossbar",alpha=0.8) +scale_fill_viridis_d(option="A") + theme(panel.background = element_blank(),legend.position = "none") + labs(y="Delta") + geom_hline(yintercept = 0)
+
+
+
+
+total_proms %>% ungroup() %>% slice(i) %>% select(-c(1,4:6)) %>% pivot_longer(cols=-c(1:2),names_to = "Scenario",values_to = "Values") %>% filter(grepl("_T1",Scenario)) %>%
+  left_join(.,xx_bios,by="Scenario") %>% #pivot_longer(cols = starts_with("bio"),names_to = "Bio",values_to = "Delta") %>% 
+  ggplot(aes(x=bio01,y=bio04,fill=Scenario)) + 
+  geom_point(size=4,shape=21) +
+  #scale_fill_viridis_d(option="D",name="Range Change") +
+  theme(panel.background = element_blank(),panel.grid = element_blank(),axis.line = element_line())
+
+
+library(patchwork)
+wrap_plots(list(p1,p2)) +
+  plot_layout(ncol=2,byrow=T,guides = "collect",tag_level = 'new') + 
+  plot_annotation(title = paste("Bioclimatic forcing"),
+                  caption='Ureta et al. 2020') & theme(legend.position = 'none')
